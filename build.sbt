@@ -1,10 +1,7 @@
-import deployssh.DeploySSH.ServerConfig
-import fr.janalyse.ssh.{SSH, SSHCommand}
-
+organizationName := "io.datadynamics"
 name := "hbase-spark"
 version := "0.1"
 scalaVersion := "2.11.8"
-idePackagePrefix := Some("io.datadynamics")
 
 libraryDependencies ++= Seq(
   "junit" % "junit" % "4.13.2" % Test,
@@ -13,6 +10,7 @@ libraryDependencies ++= Seq(
   // https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-common
   "org.apache.hadoop" % "hadoop-common" % "3.1.1.3.0.1.0-187",
   "org.apache.hadoop" % "hadoop-hdfs" % "3.1.1.3.0.1.0-187",
+  "org.apache.hadoop" % "hadoop-client" % "3.1.1.3.0.1.0-187",
 
 // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
   "org.apache.spark" %% "spark-sql" % "2.3.1.3.0.1.0-187",
@@ -47,6 +45,9 @@ resolvers += Resolver.mavenLocal
 
 logLevel := Level.Error
 logLevel in assembly := Level.Error
+
+import deployssh.DeploySSH.ServerConfig
+import fr.janalyse.ssh.{SSH, SSHCommand}
 
 lazy val myProject = project.enablePlugins(DeploySSH).settings(
   deployConfigs ++= Seq(
