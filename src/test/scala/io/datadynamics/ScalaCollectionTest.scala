@@ -4,8 +4,8 @@ import com.google.common.collect.{ArrayListMultimap, HashBasedTable}
 import org.junit.Test
 import org.slf4j.{Logger, LoggerFactory}
 
-import scala.collection.immutable
-
+import scala.collection.{immutable, mutable}
+import scala.collection.JavaConverters._
 class ScalaCollectionTest {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -121,8 +121,9 @@ class ScalaCollectionTest {
     // ArrayListMultimap: ArrayList를 value로 담을 수 있는 map. 동일 key에 put 할 경우 append.
     // HashBasedTable
 
-    val multiMap: ArrayListMultimap[String, String] = ArrayListMultimap.create()
+    val multiMap: ArrayListMultimap[String, String] = ArrayListMultimap.create()// Map<String, ArrayList<String>>
     multiMap.put("key1", "value1")
+    multiMap.put("key2", "value2")
     multiMap.put("key2", "value2")
     multiMap.put("key3", "value3")
     logger.info(s"${multiMap}")
@@ -142,5 +143,17 @@ class ScalaCollectionTest {
     val testTable: HashBasedTable[Int, String, String] = HashBasedTable.create()
     testTable.put(1, "column1", "value1")
     logger.info(s"${testTable}")
+    val columnMap: mutable.Map[String, String] = testTable.row(1).asScala
+    logger.info(s"columnMap = ${columnMap}")
+    val rowMap: mutable.Map[Int, String] = testTable.column("column1").asScala
+    logger.info(s"rowMap = ${rowMap}")
+  }
+
+  @Test
+  def foldTest(): Unit = {
+    val keys = Seq(1, 2, 3)
+    val values1 = Seq("one", "two", "three")
+    val values2 = Seq("하나", "둘", "셋")
+    // 1 -> ("one", "하나"), ...
   }
 }
