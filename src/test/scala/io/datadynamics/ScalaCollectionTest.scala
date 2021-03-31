@@ -1,5 +1,6 @@
 package io.datadynamics
 
+import com.google.common.collect.{ArrayListMultimap, HashBasedTable}
 import org.junit.Test
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -90,6 +91,7 @@ class ScalaCollectionTest {
     val seq2 = Seq("one", "two", "three")
     val map: Map[Int, String] = seq1.zip(seq2).toMap
     logger.info(s"map = ${map}")
+    logger.info(s"zipWithIndex > ${seq2.zipWithIndex}")
   }
 
   @Test
@@ -97,12 +99,48 @@ class ScalaCollectionTest {
     // append(element + list, list + element, elem + elem, list + list)
     // prepend(element + list, list + element, elem + elem, list + list)
     // :+ +: :++ ++: ++
+    val strList = List("t1", "t2")
+    val intList = List(1, 2, 3)
+    val text3: String = "t3"
+    val strVector = Vector(9, 8)
+
+    logger.info(s"strList :+ text3 >> ${strList :+ text3}")
+    logger.info(s"strList :+ intList >> ${strList :+ intList}")
+    logger.info(s"strList +: text3 >> ${strList +: text3}")
+    logger.info(s"strList +: intList >> ${strList +: intList}")
+//    logger.info(s":++ >> ${strList :++ text3}") // 2.13부터 가능
+    logger.info(s"strList ++: intList >> ${strList ++: intList}")
+    logger.info(s"strList ++ intList >> ${strList ++ intList}")
+    logger.info(s"strList ++ strVector >> ${strList ++ strVector}")
+    logger.info(s"text3 ++ strVector >> ${text3 ++ strVector}")
   }
 
   @Test
   def multimapTest(): Unit = {
     // google guava
-    // ArrayListMultimap
+    // ArrayListMultimap: ArrayList를 value로 담을 수 있는 map. 동일 key에 put 할 경우 append.
     // HashBasedTable
+
+    val multiMap: ArrayListMultimap[String, String] = ArrayListMultimap.create()
+    multiMap.put("key1", "value1")
+    multiMap.put("key2", "value2")
+    multiMap.put("key3", "value3")
+    logger.info(s"${multiMap}")
+//    logger.info(s"${multiMap.get("key2")}")
+    multiMap.put("key2", "value2_1")
+    logger.info(s"${multiMap}")
+
+    val listMap: ArrayListMultimap[String, List[Int]] = ArrayListMultimap.create()
+    val strList = List("t1", "t2")
+    val intList = List(1, 2, 3)
+    val intList2 = List(4, 5)
+    listMap.put(strList(0), intList)
+    logger.info(s"${listMap}")
+    listMap.put(strList(0), intList2)
+    logger.info(s"${listMap}")
+
+    val testTable: HashBasedTable[Int, String, String] = HashBasedTable.create()
+    testTable.put(1, "column1", "value1")
+    logger.info(s"${testTable}")
   }
 }
