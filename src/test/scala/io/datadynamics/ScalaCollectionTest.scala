@@ -4,8 +4,9 @@ import com.google.common.collect.{ArrayListMultimap, HashBasedTable}
 import org.junit.Test
 import org.slf4j.{Logger, LoggerFactory}
 
-import scala.collection.{immutable, mutable}
 import scala.collection.JavaConverters._
+import scala.collection.{immutable, mutable}
+
 class ScalaCollectionTest {
 
   private val logger: Logger = LoggerFactory.getLogger(getClass)
@@ -89,6 +90,9 @@ class ScalaCollectionTest {
   def zipTest(): Unit = {
     val seq1 = Seq(1, 2, 3)
     val seq2 = Seq("one", "two", "three")
+    val seq3 = Seq("one1", "two2", "three3")
+    logger.info(s"${seq1.zip(seq2).zip(seq3).toMap}")
+    logger.info(s"${seq1.zip(seq2.zip(seq3)).toMap}")
     val map: Map[Int, String] = seq1.zip(seq2).toMap
     logger.info(s"map = ${map}")
     logger.info(s"zipWithIndex > ${seq2.zipWithIndex}")
@@ -108,7 +112,7 @@ class ScalaCollectionTest {
     logger.info(s"strList :+ intList >> ${strList :+ intList}")
     logger.info(s"strList +: text3 >> ${strList +: text3}")
     logger.info(s"strList +: intList >> ${strList +: intList}")
-//    logger.info(s":++ >> ${strList :++ text3}") // 2.13부터 가능
+    //    logger.info(s":++ >> ${strList :++ text3}") // 2.13부터 가능
     logger.info(s"strList ++: intList >> ${strList ++: intList}")
     logger.info(s"strList ++ intList >> ${strList ++ intList}")
     logger.info(s"strList ++ strVector >> ${strList ++ strVector}")
@@ -121,13 +125,13 @@ class ScalaCollectionTest {
     // ArrayListMultimap: ArrayList를 value로 담을 수 있는 map. 동일 key에 put 할 경우 append.
     // HashBasedTable
 
-    val multiMap: ArrayListMultimap[String, String] = ArrayListMultimap.create()// Map<String, ArrayList<String>>
+    val multiMap: ArrayListMultimap[String, String] = ArrayListMultimap.create() // Map<String, ArrayList<String>>
     multiMap.put("key1", "value1")
     multiMap.put("key2", "value2")
     multiMap.put("key2", "value2")
     multiMap.put("key3", "value3")
     logger.info(s"${multiMap}")
-//    logger.info(s"${multiMap.get("key2")}")
+    //    logger.info(s"${multiMap.get("key2")}")
     multiMap.put("key2", "value2_1")
     logger.info(s"${multiMap}")
 
@@ -155,5 +159,111 @@ class ScalaCollectionTest {
     val values1 = Seq("one", "two", "three")
     val values2 = Seq("하나", "둘", "셋")
     // 1 -> ("one", "하나"), ...
+
+    // 6
+    //    logger.info(s"${Seq(1, 2, 3).fold(0)((x, i) => x+i)}")
+
+    //    val multiMap: ArrayListMultimap[Any, Any] = ArrayListMultimap.create()
+
+    //    val result = keys.fold() {(x, i) =>
+    //      multiMap.put
+    //    }
+
+    // List(((one,0),(하나,0)), ((two,1),(둘,1)), ((three,2),(셋,2)))
+    logger.info(s"${values1.zipWithIndex.zip(values2.zipWithIndex)}")
+    // List(((one,하나),0), ((two,둘),1), ((three,셋),2))
+    logger.info(s"${values1.zip(values2).zipWithIndex}")
+
+    val result = values1.zip(values2).zipWithIndex.fold(ArrayListMultimap.create()) { (x, i) =>
+      //      val test: ArrayListMultimap[Any, Any] = x
+      //      x ++ i
+      val temp = i.asInstanceOf[(Any, Any)]
+      x.asInstanceOf[ArrayListMultimap[Any, Any]].put(temp._2, temp._1)
+      x
+    }
+    logger.info(s"result >> ${result}")
+
+    /*values1.zipWithIndex.foreach {
+      case(value, count) => multiMap.put(count+1, value)
+    }
+    values2.zipWithIndex.foreach{
+      case(value, count) => multiMap.put(count+1, value)
+    }
+    logger.info(s"${multiMap}")
+    */
+
+    /*val lists = Seq(keys, values1, values2)
+    val result = lists.fold(Seq[String]()) {(x, i) =>
+      // List(1, 2, 3, one, two, three, 하나, 둘, 셋)
+//      x++i
+      // 하나
+      i(0).toString
+    }*/
+
+
+    /*val result = values1.fold((values2, Seq[String]())) {
+      case ((a, b), c) => (a, b, c)
+    }*/
+
+    /*keys.fold(values1, values2) { (a, b) =>
+      // {1=[(List(one, two, three),List(하나, 둘, 셋))], 2=[true], 3=[true]}
+      multiMap.put(b, a)
+    }
+    logger.info(s"${multiMap}")
+    */
+
+    /*val lists = Seq(values1, values2)
+    val result = keys.fold(values1, values2) {(x, i) =>
+//      ((Seq)x)(0)
+    }
+    logger.info(s"${result}")
+    */
+
+    logger.info(s"${keys.zip(values1.zip(values2).toList)}")
+    logger.info(s"${keys.zip(values1.zip(values2).toList).toMap}")
+    val values: Seq[(Int, (String, String))] = keys.zip(values1.zip(values2))
+    val result2 = values.fold(ArrayListMultimap.create[Int, String]()) { (x, i) =>
+      i
+      //      x.asInstanceOf[ArrayListMultimap[Any, Any]].put()
+    }
+    logger.info(s"result2 >> ${result2}")
+
+    val v: ArrayListMultimap[Int, String] = values.foldLeft(ArrayListMultimap.create[Int, String]())(
+      //    val v: ArrayListMultimap[Int, String] = values./:(ArrayListMultimap.create[Int, String]())(
+      (accum, elem) => {
+        accum.put(elem._1, elem._2._1)
+        accum.put(elem._1, elem._2._2)
+        accum
+      }
+    )
+    logger.info(s"v = ${v}")
+  }
+
+  @Test
+  def tupleTest(): Unit = {
+    val t1: (String, String) = ("one", "하나")
+    val t2: Tuple2[String, String] = "two" -> "둘"
+    t1._1
+    t1._2
+//    Tuple22
+  }
+
+  @Test
+  def functionTest() {
+    val op1: Int => Int = a => a + 1
+
+    def op2(a: Int): Int = a + 1
+
+    val op3: Int => Int = _ + 1
+
+    val l = List(1, 2, 3)
+    l.map(x => {
+      x + 1
+    })
+    l.map(x => x + 1)
+    l.map(_ + 1)
+    l.map(op1)
+    l.map(op2)
+    l.map(op3)
   }
 }
