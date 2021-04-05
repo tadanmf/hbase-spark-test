@@ -1,15 +1,24 @@
 package io.datadynamics
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.hbase.KeyValue
+import org.apache.hadoop.hbase.client.{Admin, ColumnFamilyDescriptor, ColumnFamilyDescriptorBuilder, Connection, ConnectionFactory, RegionLocator, Table, TableDescriptorBuilder}
+import org.apache.hadoop.hbase.{HBaseConfiguration, KeyValue, TableName}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
+import org.apache.hadoop.hbase.mapreduce.HFileOutputFormat2
+import org.apache.hadoop.hbase.tool.LoadIncrementalHFiles
 import org.apache.hadoop.hbase.util.Bytes
 import org.apache.hadoop.hdfs.DistributedFileSystem
-import org.apache.spark.SparkConf
+import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.{Partitioner, SparkConf}
 import org.junit.{Before, Test}
 import org.slf4j.{Logger, LoggerFactory}
+
+import java.io.{ByteArrayOutputStream, DataOutputStream}
+import java.text.SimpleDateFormat
+import java.util
 
 class ParseTest extends Serializable {
 
@@ -48,55 +57,110 @@ class ParseTest extends Serializable {
     val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
 
     // hbase setting
-    /*val hbaseConfig: Configuration = HBaseConfiguration.create(conf)
-    val connection: Connection = ConnectionFactory.createConnection(hbaseConfig)
-    val admin: Admin = connection.getAdmin
-    */
-
-    // create table
-    /*val table = TableDescriptorBuilder.newBuilder(TableName.valueOf("create_test")).setColumnFamily(ColumnFamilyDescriptorBuilder.of("create_cf"))
-    admin.createTable(table.build())
-    logger.info(s"create table")
-
-    val tableNames: Array[TableName] = admin.listTableNames()
-    tableNames.foreach(tableName => logger.info(s"table name > ${tableName}"))
-    */
+    val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
+    hbaseConfig.set("hbase.zookeeper.quorum", "tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local")
+    hbaseConfig.set("zookeeper.znode.parent", "/hbase-unsecure")
+    hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
 
     // scan log file
     val partitions = 6
     val baseRdd: RDD[ChatLog] = spark.sparkContext.textFile(chatPath, partitions).map(line => {
       ChatLog.create(line)
     })
-    baseRdd.take(5).map(log => logger.info(s"baseRdd > ${log}"))
+//    baseRdd.take(5).map(log => logger.info(s"baseRdd > ${log}"))
 
-    val cellRdd: RDD[((String, Long, String), Iterable[ChatLog])] = baseRdd.groupBy(chatLog => {
+    // set input format
+    val rowKeySdf = new SimpleDateFormat("yyyyMMdd-HHmmss.SSS")
+    val cellRdd: RDD[((String, String, Long), Array[Byte])] = baseRdd.groupBy(chatLog => {
       (chatLog.bjId, chatLog.bStartTime, chatLog.userId)
-    })
+    }).map(kv => {
+      val (bjId: String, startTime: Long, userId: String) = kv._1
+      val chatLogs: Iterable[ChatLog] = kv._2
+      val chats: Array[Byte] = Bytes.toBytes(chatLogs.size) ++ chatLogs.map(chatLog => {
+        val bos = new ByteArrayOutputStream(128)
+        val dos = new DataOutputStream(bos)
+        bos.toByteArray
+      }).reduce(_ ++ _)
 
+      val bStartTime: String = rowKeySdf.format(startTime)
+      val bucket: Int = (s"${bjId}^${startTime}".hashCode & Int.MaxValue) % partitions
+      ((s"${bucket}^${bjId}^${bStartTime}", userId, startTime), chats)
+    })
     logger.info(s"${cellRdd.count()}")
-    cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._1}"))
+//    cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._1}"))
+//    cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._2}"))
+
+    class CellPartitioner(partitions: Int) extends Partitioner {
+      override def numPartitions: Int = partitions
+
+      override def getPartition(key: Any): Int = key.asInstanceOf[(String, String, Long)]._1.split("\\^")(0).toInt
+    }
+
+    val cfs: util.Collection[ColumnFamilyDescriptor] = new util.HashSet[ColumnFamilyDescriptor]()
+    var test = new util.ArrayList[String]()
+    var testList = List[String]()
+
+    val connection: Connection = ConnectionFactory.createConnection(hbaseConfig)
+    val admin: Admin = connection.getAdmin
+    val tableName: TableName = TableName.valueOf("create_test")
 
     // create cell
-    /*val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = baseRdd.map(log => {
-      logger.info(s"${log}")
-      val rowkey: Array[Byte] = Bytes.toBytes(log.chatNow)
-      val family: Array[Byte] = Bytes.toBytes(log.bStartTime)
-      val qualifier: Array[Byte] = log.userId.getBytes()
-      val value: Array[Byte] = log.chatText.getBytes()
+    val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = cellRdd.repartitionAndSortWithinPartitions(new CellPartitioner(partitions)).map(tempCell => {
+      val (rowKeyQualifier: (String, String, Long), value: Array[Byte]) = tempCell
+      val (rowkeyString: String, qualifierString: String, startTime: Long) = rowKeyQualifier
+      val ts: Long = rowKeySdf.parse(rowkeyString.split("\\^", -1)(2)).getTime
+      val startTimeStr: String = startTime.toString
 
-      val cell = new KeyValue(rowkey, family, qualifier, value)
+      cfs.add(ColumnFamilyDescriptorBuilder.of(startTimeStr))
+      test.add(startTimeStr)
+      testList = testList :+ startTimeStr
+      admin.addColumnFamily(tableName, ColumnFamilyDescriptorBuilder.of(startTimeStr))
+
+      val rowkey: Array[Byte] = rowkeyString.getBytes
+      val family: Array[Byte] = Bytes.toBytes(startTimeStr)
+      val qualifier: Array[Byte] = qualifierString.getBytes()
+
+      val cell = new KeyValue(rowkey, family, qualifier, ts, value)
       (new ImmutableBytesWritable(rowkey), cell)
     })
-    toCellRdd.saveAsNewAPIHadoopFile()
-    */
 
-//    toCellRdd.take(5).map(rdd => logger.info(s"${rdd}"))
+    logger.info(s"cfs size >>> ${cfs.size()}")
+    logger.info(s"test size >>> ${test.size()}")
+    testList.foreach(s => logger.info(s"testList >>> ${s}"))
+//    admin.get
 
+    // job, connection, admin
+    /*val job: Job = Job.getInstance(hbaseConfig, "toCellJob")
+
+    // create table
+//    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamily(ColumnFamilyDescriptorBuilder.of()).build())
+    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs).build())
+    logger.info(s"create table")
+
+    val tableNames: Array[TableName] = admin.listTableNames()
+    tableNames.foreach(name => logger.info(s"table name > ${name}"))
+
+    val regionLocator: RegionLocator = connection.getRegionLocator(tableName)
+    val table: Table = connection.getTable(tableName)
 
     // create hfile
-    //    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
-    //    val outputPath = new Path(outputDir)
+    HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator)
+    val toCellConf: Configuration = job.getConfiguration
 
+    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
+    val outputPath = new Path(outputDir)
+    val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    if (fs.exists(outputPath)) {
+      fs.delete(outputPath, true)
+      logger.warn(s"delete ${outputPath}")
+    }
+    toCellRdd.saveAsNewAPIHadoopFile(outputDir, classOf[ImmutableBytesWritable], classOf[KeyValue], classOf[HFileOutputFormat2], toCellConf)
+
+    val loadIncrementalHFiles = new LoadIncrementalHFiles(hbaseConfig)
+    logger.info("bulk loading ...")
+    loadIncrementalHFiles.doBulkLoad(outputPath, admin, table, regionLocator, false, true)
+    logger.info("bulk load success")
+    */
   }
 
   @Test
