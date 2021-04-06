@@ -2,12 +2,10 @@ package io.datadynamics
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.hbase.client.{Admin, ColumnFamilyDescriptor, ColumnFamilyDescriptorBuilder, Connection, ConnectionFactory, RegionLocator, Table, TableDescriptorBuilder}
-import org.apache.hadoop.hbase.{HBaseConfiguration, KeyValue, TableName}
+import org.apache.hadoop.hbase.client.{Admin, Connection, ConnectionFactory}
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable
-import org.apache.hadoop.hbase.mapreduce.HFileOutputFormat2
-import org.apache.hadoop.hbase.tool.LoadIncrementalHFiles
 import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.{HBaseConfiguration, KeyValue, TableName}
 import org.apache.hadoop.hdfs.DistributedFileSystem
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.rdd.RDD
@@ -18,7 +16,6 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{ByteArrayOutputStream, DataOutputStream}
 import java.text.SimpleDateFormat
-import java.util
 
 class ParseTest extends Serializable {
 
@@ -67,7 +64,7 @@ class ParseTest extends Serializable {
     val baseRdd: RDD[ChatLog] = spark.sparkContext.textFile(chatPath, partitions).map(line => {
       ChatLog.create(line)
     })
-//    baseRdd.take(5).map(log => logger.info(s"baseRdd > ${log}"))
+    //    baseRdd.take(5).map(log => logger.info(s"baseRdd > ${log}"))
 
     // set input format
     val rowKeySdf = new SimpleDateFormat("yyyyMMdd-HHmmss.SSS")
@@ -87,8 +84,8 @@ class ParseTest extends Serializable {
       ((s"${bucket}^${bjId}^${bStartTime}", userId, startTime), chats)
     })
     logger.info(s"${cellRdd.count()}")
-//    cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._1}"))
-//    cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._2}"))
+    //cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._1}"))
+    //cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._2}"))
 
     class CellPartitioner(partitions: Int) extends Partitioner {
       override def numPartitions: Int = partitions
@@ -96,13 +93,14 @@ class ParseTest extends Serializable {
       override def getPartition(key: Any): Int = key.asInstanceOf[(String, String, Long)]._1.split("\\^")(0).toInt
     }
 
-    val cfs: util.Collection[ColumnFamilyDescriptor] = new util.HashSet[ColumnFamilyDescriptor]()
-    var test = new util.ArrayList[String]()
-    var testList = List[String]()
-
     val connection: Connection = ConnectionFactory.createConnection(hbaseConfig)
-    val admin: Admin = connection.getAdmin
     val tableName: TableName = TableName.valueOf("create_test")
+
+    // broadcast
+    // transformation, action
+
+    //val cfs = spark.sparkContext.broadcast(new util.HashSet[ColumnFamilyDescriptor]())
+    var cfs = spark.sparkContext.broadcast(List("one"))
 
     // create cell
     val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = cellRdd.repartitionAndSortWithinPartitions(new CellPartitioner(partitions)).map(tempCell => {
@@ -111,10 +109,9 @@ class ParseTest extends Serializable {
       val ts: Long = rowKeySdf.parse(rowkeyString.split("\\^", -1)(2)).getTime
       val startTimeStr: String = startTime.toString
 
-      cfs.add(ColumnFamilyDescriptorBuilder.of(startTimeStr))
-      test.add(startTimeStr)
-      testList = testList :+ startTimeStr
-      admin.addColumnFamily(tableName, ColumnFamilyDescriptorBuilder.of(startTimeStr))
+      //      cfs = (cfs.value :+ startTimeStr).asInstanceOf[Broadcast[List[String]]]
+      cfs.value
+      cfs
 
       val rowkey: Array[Byte] = rowkeyString.getBytes
       val family: Array[Byte] = Bytes.toBytes(startTimeStr)
@@ -124,20 +121,20 @@ class ParseTest extends Serializable {
       (new ImmutableBytesWritable(rowkey), cell)
     })
 
-    logger.info(s"cfs size >>> ${cfs.size()}")
-    logger.info(s"test size >>> ${test.size()}")
-    testList.foreach(s => logger.info(s"testList >>> ${s}"))
-//    admin.get
+    logger.info(s"${cfs.value.size}")
+    logger.info(s"${cfs.value(0)}")
+    logger.info(s"${cfs.value}")
 
     // job, connection, admin
-    /*val job: Job = Job.getInstance(hbaseConfig, "toCellJob")
+    val job: Job = Job.getInstance(hbaseConfig, "toCellJob")
+    val admin: Admin = connection.getAdmin
 
     // create table
-//    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamily(ColumnFamilyDescriptorBuilder.of()).build())
-    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs).build())
+    //    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamily(ColumnFamilyDescriptorBuilder.of()).build())
+    //    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs).build())
     logger.info(s"create table")
 
-    val tableNames: Array[TableName] = admin.listTableNames()
+    /*val tableNames: Array[TableName] = admin.listTableNames()
     tableNames.foreach(name => logger.info(s"table name > ${name}"))
 
     val regionLocator: RegionLocator = connection.getRegionLocator(tableName)
