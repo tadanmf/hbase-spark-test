@@ -4,7 +4,11 @@ import com.google.common.collect.{ArrayListMultimap, HashBasedTable}
 import org.junit.Test
 import org.slf4j.{Logger, LoggerFactory}
 
+import java.util
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{immutable, mutable}
 
 class ScalaCollectionTest {
@@ -103,7 +107,7 @@ class ScalaCollectionTest {
     // append(element + list, list + element, elem + elem, list + list)
     // prepend(element + list, list + element, elem + elem, list + list)
     // :+ +: :++ ++: ++
-    val strList = List("t1", "t2")
+    var strList = List("t1", "t2")
     val intList = List(1, 2, 3)
     val text3: String = "t3"
     val strVector = Vector(9, 8)
@@ -117,6 +121,8 @@ class ScalaCollectionTest {
     logger.info(s"strList ++ intList >> ${strList ++ intList}")
     logger.info(s"strList ++ strVector >> ${strList ++ strVector}")
     logger.info(s"text3 ++ strVector >> ${text3 ++ strVector}")
+    logger.info(s"strList += text3 >> ${strList = strList :+ text3}")
+    logger.info(s"strList >> ${strList}")
   }
 
   @Test
@@ -265,5 +271,63 @@ class ScalaCollectionTest {
     l.map(op1)
     l.map(op2)
     l.map(op3)
+  }
+
+  @Test
+  def mutableListTest(): Unit = {
+    // mutable list
+    logger.info(s"start first test")
+    val list = new mutable.MutableList[(String, String)]()
+    for (x <- 1 to 10000000) {
+      val tuple: (String, String) = (x.toString, x.toString)
+      list += tuple
+    }
+//    list += 4
+//    list ++= List(11, 12, 13, 14, 15, 16)
+//    val strings = new ListBuffer[String]()
+//    val arraySeq = new mutable.ArraySeq[String](5)
+    //val strings1: mutable.ArraySeq[String] = arraySeq :+ "Asdf"
+    //logger.info(s"arraySeq = ${arraySeq}")
+    //logger.info(s"${list}")
+    logger.info(s"complete")
+  }
+
+  @Test
+  def arrayBufferTest(): Unit = {
+    // ArrayBuffer
+    logger.info(s"start second test")
+//    val arrayBuffer = ArrayBuffer(1)
+    val arrayBuffer:ArrayBuffer[(String, String)] = new ArrayBuffer[(String, String)]()
+    for (x <- 1 to 10000000) {
+      val tuple: (String, String) = (x.toString, x.toString)
+      arrayBuffer += tuple
+    }
+//    arrayBuffer += 4
+//    arrayBuffer -= 3
+//    arrayBuffer ++= List(11, 12, 13, 14, 15, 16)
+//    logger.info(s"${arrayBuffer}")
+    logger.info(s"complete")
+  }
+
+  @Test
+  def mutableListVersusArrayBufferTest(): Unit = {
+    // 속도 차이
+    val startTime: Long = System.nanoTime()
+    mutableListTest()     // 19 sec
+    val middleTime = System.nanoTime()
+    logger.info(s"${TimeUnit.SECONDS.convert((middleTime - startTime), TimeUnit.NANOSECONDS)} seconds")
+    arrayBufferTest()     // 5 sec
+    val endTime: Long = System.nanoTime()
+    logger.info(s"${TimeUnit.SECONDS.convert((endTime - middleTime), TimeUnit.NANOSECONDS)} seconds")
+  }
+
+  @Test
+  def mutableMapTest(): Unit = {
+    // mutable map
+  }
+
+  @Test
+  def mutableSetTest(): Unit = {
+    // mutable set
   }
 }
