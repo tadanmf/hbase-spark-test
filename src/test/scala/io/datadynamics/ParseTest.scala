@@ -109,7 +109,7 @@ class ParseTest extends Serializable {
     val tableName: TableName = TableName.valueOf("create_test")
 
     // data에서 column family 추출하여 저장할 변수
-    val cfs = spark.sparkContext.broadcast(mutable.Set[ColumnFamilyDescriptor]())
+    //val cfs = spark.sparkContext.broadcast(mutable.Set[ColumnFamilyDescriptor]())
 
     // create cell
     val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = cellRdd.repartitionAndSortWithinPartitions(new CellPartitioner(partitions)).map(tempCell => {
@@ -118,10 +118,11 @@ class ParseTest extends Serializable {
       val ts: Long = rowKeySdf.parse(rowkeyString.split("\\^", -1)(2)).getTime
       val startTimeStr: String = startTime.toString
 
-      cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
+      //cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
 
       val rowkey: Array[Byte] = rowkeyString.getBytes
-      val family: Array[Byte] = Bytes.toBytes(startTimeStr)
+      val family: Array[Byte] = Bytes.toBytes("snappy_cf")
+      //val family: Array[Byte] = Bytes.toBytes(startTimeStr)
       val qualifier: Array[Byte] = qualifierString.getBytes()
       //val value = Bytes.toBytes(chat)
 
@@ -138,11 +139,11 @@ class ParseTest extends Serializable {
     val admin: Admin = connection.getAdmin
 
     // create table
-    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs.value.asJava).build())
-    logger.info(s"create table")
+    //admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs.value.asJava).build())
+    //logger.info(s"create table")
 
-    val tableNames: Array[TableName] = admin.listTableNames()
-    tableNames.foreach(name => logger.info(s"table name > ${name}"))
+    //val tableNames: Array[TableName] = admin.listTableNames()
+    //tableNames.foreach(name => logger.info(s"table name > ${name}"))
 
     val regionLocator: RegionLocator = connection.getRegionLocator(tableName)
     val table: Table = connection.getTable(tableName)
@@ -174,10 +175,11 @@ class ParseTest extends Serializable {
     hbaseConfig.set("zookeeper.znode.parent", "/hbase-unsecure")
     hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
 
-    val userId = "jjjuuu" // qualifier
+    val cf = "gzip_cf"        // column family
+    val q = "jjjuuu"          // qualifier
 
     val scan = new Scan()
-    scan.addColumn("1582635623000".getBytes, userId.getBytes)
+    scan.addColumn(cf.getBytes, q.getBytes)
     //scan.setLimit(4)
 
     hbaseConfig.set(TableInputFormat.INPUT_TABLE, "create_test")
