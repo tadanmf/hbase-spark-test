@@ -24,10 +24,12 @@ object HbaseSpark extends Serializable {
   private val spark: SparkSession = SparkSession.builder().config(sparkConfig).getOrCreate()
 
   def main(args: Array[String]): Unit = {
-    sparkConfig.set("spark.hadoop.fs.defaultFS", "hdfs://172.30.1.243")
+    //sparkConfig.set("spark.hadoop.fs.defaultFS", "hdfs://172.30.1.243")
+    sparkConfig.set("spark.hadoop.fs.defaultFS", "hdfs://nn")
     sparkConfig.set("spark.hadoop.fs.hdfs.impl", classOf[DistributedFileSystem].getName)
 
-    val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
+    //val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
+    val chatPath = "hdfs://nn/download/input/chat_1582635623000.log"
 
     // hbase setting
     val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
@@ -36,7 +38,7 @@ object HbaseSpark extends Serializable {
     hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
 
     // scan log file
-    val partitions = 6
+    val partitions = 1
     val baseRdd: RDD[ChatLog] = spark.sparkContext.textFile(chatPath, partitions).map(line => {
       ChatLog.create(line)
     })
@@ -65,7 +67,7 @@ object HbaseSpark extends Serializable {
       //((s"${bucket}^${bjId}^${bStartTime}", userId, startTime), chats)
       ((s"${bucket}^${bjId}^${chatTime}", userId, startTime), chats)
     })
-    logger.info(s"${cellRdd.count()}")
+    //logger.info(s"${cellRdd.count()}")
     //cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._1}"))
     //cellRdd.take(3).map(log => logger.info(s"cellRdd > ${log._2}"))
 
@@ -91,7 +93,7 @@ object HbaseSpark extends Serializable {
       //cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
 
       val rowkey: Array[Byte] = rowkeyString.getBytes
-      val family: Array[Byte] = Bytes.toBytes("snappy_cf")
+      val family: Array[Byte] = Bytes.toBytes("block_ttl_cf")
       //val family: Array[Byte] = Bytes.toBytes(startTimeStr)
       val qualifier: Array[Byte] = qualifierString.getBytes()
       //val value = Bytes.toBytes(chat)
@@ -101,7 +103,7 @@ object HbaseSpark extends Serializable {
     })
 
     // cfs 값 세팅을 위해 RDD action
-    toCellRdd.count()
+    //toCellRdd.count()
     //logger.info(s"${cfs.value}")
 
     // job, connection, admin
@@ -122,7 +124,8 @@ object HbaseSpark extends Serializable {
     HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator)
     val toCellConf: Configuration = job.getConfiguration
 
-    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
+    //val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
+    val outputDir = "hdfs://nn/download/output_hfile"
     val outputPath = new Path(outputDir)
     val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
     if (fs.exists(outputPath)) {

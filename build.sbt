@@ -20,6 +20,9 @@ libraryDependencies ++= Seq(
   "org.apache.hbase" % "hbase-client" % "2.0.0.3.0.1.0-187",
   "org.apache.hbase" % "hbase-server" % "2.0.0.3.0.1.0-187",
   "org.apache.hbase" % "hbase-mapreduce" % "2.0.0.3.0.1.0-187",
+  "org.apache.hbase" % "hbase-hadoop-compat" % "2.0.0.3.0.1.0-187",
+  "org.apache.hbase" % "hbase-hadoop2-compat" % "2.0.0.3.0.1.0-187",
+  "org.apache.hbase" % "hbase-zookeeper" % "2.0.0.3.0.1.0-187",
 
   // https://mvnrepository.com/artifact/org.apache.commons/commons-compress
   "org.apache.commons" % "commons-compress" % "1.19",

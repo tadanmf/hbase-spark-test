@@ -66,7 +66,7 @@ class ParseTest extends Serializable {
     hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
 
     // scan log file
-    val partitions = 6
+    val partitions = 1
     val baseRdd: RDD[ChatLog] = spark.sparkContext.textFile(chatPath, partitions).map(line => {
       ChatLog.create(line)
     })
@@ -80,9 +80,9 @@ class ParseTest extends Serializable {
       //println(s"${kv._2}")
       val (bjId: String, startTime: Long, userId: String, chatNow: Long) = kv._1
       val chatLogs: Iterable[ChatLog] = kv._2
-      val chat: String = chatLogs.map(chatLog => {
-        chatLog.chatText
-      }).mkString
+      //val chat: String = chatLogs.map(chatLog => {
+      //  chatLog.chatText
+      //}).mkString
       val chats: Array[Byte] = Bytes.toBytes(chatLogs.size) ++ chatLogs.map(chatLog => {
         val bos = new ByteArrayOutputStream(128)
         val dos = new DataOutputStream(bos)
@@ -121,7 +121,7 @@ class ParseTest extends Serializable {
       //cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
 
       val rowkey: Array[Byte] = rowkeyString.getBytes
-      val family: Array[Byte] = Bytes.toBytes("snappy_cf")
+      val family: Array[Byte] = Bytes.toBytes("block_ttl_cf")
       //val family: Array[Byte] = Bytes.toBytes(startTimeStr)
       val qualifier: Array[Byte] = qualifierString.getBytes()
       //val value = Bytes.toBytes(chat)
@@ -152,7 +152,7 @@ class ParseTest extends Serializable {
     HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator)
     val toCellConf: Configuration = job.getConfiguration
 
-    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
+    val outputDir = "hdfs://nn/download/output_hfile"
     val outputPath = new Path(outputDir)
     val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
     if (fs.exists(outputPath)) {
@@ -175,7 +175,7 @@ class ParseTest extends Serializable {
     hbaseConfig.set("zookeeper.znode.parent", "/hbase-unsecure")
     hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
 
-    val cf = "gzip_cf"        // column family
+    val cf = "snappy_cf"        // column family
     val q = "jjjuuu"          // qualifier
 
     val scan = new Scan()
