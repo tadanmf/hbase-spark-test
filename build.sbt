@@ -28,7 +28,11 @@ libraryDependencies ++= Seq(
   "org.apache.commons" % "commons-compress" % "1.19",
 
   // https://mvnrepository.com/artifact/com.typesafe/config
-  "com.typesafe" % "config" % "1.4.1"
+  "com.typesafe" % "config" % "1.4.1",
+
+  "com.lucidworks.spark" % "spark-solr" % "3.8.0" excludeAll(
+    ExclusionRule("org.restlet.jee", "*")
+  )
 )
 
 mainClass in assembly := Some("io.datadynamics.HbaseSpark")
