@@ -105,10 +105,9 @@ class SparkSolr {
 
   @Test
   def chatWriteTest(): Unit = {
-    val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
-    val partitions = 5
 
-    val header: RDD[String] = spark.sparkContext.parallelize(Array("userId,userNick,bStartTime"))
+    val chatPath = "hdfs://172.30.1.243:8020/download/input/*"
+    val partitions = 5
 
     val baseRdd = spark.sparkContext.textFile(chatPath, partitions).map(line => {
       ChatLog.create(line)
@@ -119,14 +118,23 @@ class SparkSolr {
     }).map(kv => {
       val result: ((String, String, Long), Iterable[ChatLog]) = kv
       val (userId: String, userNick:String, bStartTime:Long) = result._1
-      Row(userId, userNick, bStartTime)
+      //Row(userId, userNick, bStartTime)
+
+      val chatLogs: Iterable[ChatLog] = result._2
+      var changeTime: Long = chatLogs.head.chatNow
+      chatLogs.map(chatLog => {
+        if (changeTime > chatLog.chatNow) {
+          changeTime = chatLog.chatNow
+        }
+      })
+      Row(userId, userNick, bStartTime, changeTime)
     })
 
     logger.info(s"valueRdd.count() >> ${valueRdd.count()}")
 
     val options = Map(
       "zkhost" -> "172.30.1.241:2181,172.30.1.243:2181,172.30.1.244:2181/solrtest",
-      "collection" -> "chats",
+      "collection" -> "chat_nick_change",
       "commit_within" -> "2000",
       "gen_uniq_key" -> "true"
     )
@@ -134,7 +142,8 @@ class SparkSolr {
     val schema: StructType = StructType(Array(
       StructField("userId", DataTypes.StringType),
       StructField("userNick", DataTypes.StringType),
-      StructField("bStartTime", LongType)
+      StructField("bStartTime", LongType),
+      StructField("nickChangeTime", LongType)
     ))
 
     val valueDF: DataFrame = spark.createDataFrame(valueRdd, schema)
@@ -158,7 +167,7 @@ class SparkSolr {
       .load
 
     val cfqs: Array[(String, String)] = df.collect().map(row => {
-      val cf: String = row.getAs[String](0)
+      val cf: String = row.getAs[Long](0).toString
       val q: String = row.getAs[String]("userId")
       (cf, q)
     })
@@ -173,7 +182,7 @@ class SparkSolr {
     cfqs.foreach(cfq => {
       scan.addColumn(cfq._1.getBytes, cfq._2.getBytes)
     })
-    hbaseConfig.set(TableInputFormat.INPUT_TABLE, "create_test")
+    hbaseConfig.set(TableInputFormat.INPUT_TABLE, "chat")
     hbaseConfig.set(TableInputFormat.SCAN, convertScanToString(scan))
 
     val resultRdd: RDD[(ImmutableBytesWritable, Result)] =
@@ -196,9 +205,13 @@ class SparkSolr {
       buf
     })
 
-    values.take(3).map(s => logger.info(s"[${s._1}] ${s._2}"))
+    //values.take(3).map(s => logger.info(s"[${s._1}] ${s._2}"))
 
+    val sortedRdd: RDD[(String, String)] = values.sortByKey()
 
+    sortedRdd.take(3).map(s => logger.info(s"[${s._1}] ${s._2}"))
+
+    /*
     df.collect().foreach(row => {
 
       //val cf = row.get(0).toString
@@ -232,13 +245,42 @@ class SparkSolr {
 
       values.take(3).map(s => logger.info(s"[${s._1}] ${s._2}"))
     })
+    */
 
+  }
+
+  @Test
+  def chatWriteTest2(): Unit = {
+
+    val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
+    val partitions = 5
+
+    val baseRdd = spark.sparkContext.textFile(chatPath, partitions).map(line => {
+      ChatLog.create(line)
+    })
+
+    val valueRdd: RDD[Row] = baseRdd.groupBy(chat => {
+      (chat.userId, chat.userNick, chat.bStartTime)
+    }).map(kv => {
+      val result: ((String, String, Long), Iterable[ChatLog]) = kv
+      val (userId: String, userNick: String, bStartTime: Long) = result._1
+      val chatLogs: Iterable[ChatLog] = result._2
+      var changeTime: Long = chatLogs.head.chatNow
+      chatLogs.map(chatLog => {
+        if (changeTime < chatLog.chatNow) {
+          changeTime = chatLog.chatNow
+        }
+      })
+      Row(userId, userNick, bStartTime, changeTime)
+    })
+
+    valueRdd.take(3).map(s => logger.info(s"s >> ${s}"))
   }
 
 
   @Test
   def deleteDocument(): Unit = {
-    val collection = "chats"
+    val collection = "chat_nick_change"
     val client: CloudSolrClient = new CloudSolrClient.Builder(
       List("tt05cn001.hdp.local:2181", "tt05nn001.hdp.local:2181", "tt05nn002.hdp.local:2181").asJava,
       Optional.of("/solrtest")
@@ -252,7 +294,7 @@ class SparkSolr {
   }
 
   @Test
-  def deleteCollectionsTest(): Unit = {
+  def deleteCollectionTest(): Unit = {
     val collection = "films_test"
     val client: CloudSolrClient = new CloudSolrClient.Builder(
       List("tt05cn001.hdp.local:2181", "tt05nn001.hdp.local:2181", "tt05nn002.hdp.local:2181").asJava,
