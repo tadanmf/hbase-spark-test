@@ -121,13 +121,18 @@ class SparkSolr {
       //Row(userId, userNick, bStartTime)
 
       val chatLogs: Iterable[ChatLog] = result._2
-      var changeTime: Long = chatLogs.head.chatNow
+      val now: Long = chatLogs.head.chatNow
+      var changeStartTime: Long = now
+      var changeEndTime: Long = now
       chatLogs.map(chatLog => {
-        if (changeTime > chatLog.chatNow) {
-          changeTime = chatLog.chatNow
+        val chatNow: Long = chatLog.chatNow
+        if (changeStartTime > chatNow) {
+          changeStartTime = chatNow
+        } else if (changeEndTime < chatNow) {
+          changeEndTime = chatNow
         }
       })
-      Row(userId, userNick, bStartTime, changeTime)
+      Row(userId, userNick, bStartTime, changeStartTime, changeEndTime)
     })
 
     logger.info(s"valueRdd.count() >> ${valueRdd.count()}")
@@ -143,7 +148,8 @@ class SparkSolr {
       StructField("userId", DataTypes.StringType),
       StructField("userNick", DataTypes.StringType),
       StructField("bStartTime", LongType),
-      StructField("nickChangeTime", LongType)
+      StructField("nickChangeStartTime", LongType),
+      StructField("nickChangeEndTime", LongType)
     ))
 
     val valueDF: DataFrame = spark.createDataFrame(valueRdd, schema)
