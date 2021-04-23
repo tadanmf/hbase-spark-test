@@ -24,7 +24,10 @@ libraryDependencies ++= Seq(
   "org.apache.hbase" % "hbase-hadoop2-compat" % "2.0.0.3.0.1.0-187",
   "org.apache.hbase" % "hbase-zookeeper" % "2.0.0.3.0.1.0-187",
 
-  // https://mvnrepository.com/artifact/org.apache.commons/commons-compress
+  // https://mvnrepository.com/artifact/org.apache.hive/hive-hbase-handler
+  "org.apache.hive" % "hive-hbase-handler" % "3.1.0.3.0.1.0-187",
+
+// https://mvnrepository.com/artifact/org.apache.commons/commons-compress
   "org.apache.commons" % "commons-compress" % "1.19",
 
   // https://mvnrepository.com/artifact/com.typesafe/config
@@ -32,7 +35,15 @@ libraryDependencies ++= Seq(
 
   "com.lucidworks.spark" % "spark-solr" % "3.8.0" excludeAll(
     ExclusionRule("org.restlet.jee", "*")
-  )
+  ),
+
+  // https://mvnrepository.com/artifact/org.apache.hive/hive-jdbc
+  "org.apache.hive" % "hive-jdbc" % "3.1.0.3.0.1.0-187",
+
+// https://mvnrepository.com/artifact/org.apache.spark/spark-hive
+  "org.apache.spark" %% "spark-hive" % "2.3.1.3.0.1.0-187" % "provided",
+
+  "com.hortonworks.hive" %% "hive-warehouse-connector" % "1.0.0.3.0.1.0-187"
 )
 
 mainClass in assembly := Some("io.datadynamics.HbaseSpark")

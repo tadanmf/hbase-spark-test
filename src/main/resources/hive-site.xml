@@ -1,0 +1,48 @@
+  <configuration  xmlns:xi="http://www.w3.org/2001/XInclude">
+    
+    <property>
+      <name>hive.exec.scratchdir</name>
+      <value>/tmp/spark</value>
+    </property>
+    
+    <property>
+      <name>hive.metastore.client.connect.retry.delay</name>
+      <value>5</value>
+    </property>
+    
+    <property>
+      <name>hive.metastore.client.socket.timeout</name>
+      <value>1800</value>
+    </property>
+    
+    <property>
+      <name>hive.metastore.uris</name>
+      <value>thrift://tt05cn001.hdp.local:9083</value>
+    </property>
+    
+    <property>
+      <name>hive.server2.enable.doAs</name>
+      <value>false</value>
+    </property>
+    
+    <property>
+      <name>hive.server2.thrift.http.port</name>
+      <value>10002</value>
+    </property>
+    
+    <property>
+      <name>hive.server2.thrift.port</name>
+      <value>10016</value>
+    </property>
+    
+    <property>
+      <name>hive.server2.transport.mode</name>
+      <value>binary</value>
+    </property>
+    
+    <property>
+      <name>metastore.catalog.default</name>
+      <value>spark</value>
+    </property>
+    
+  </configuration>

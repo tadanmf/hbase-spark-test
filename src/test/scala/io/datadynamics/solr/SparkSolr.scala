@@ -277,6 +277,22 @@ class SparkSolr {
     valueRdd.take(3).map(s => logger.info(s"s >> ${s}"))
   }
 
+  @Test
+  def createCollectionTest(): Unit = {
+    val shards = 5
+    val replicas = 2
+    val collection = "chat_nick_change"
+    val client: CloudSolrClient = new CloudSolrClient.Builder(
+      List("tt05cn001.hdp.local:2181", "tt05nn001.hdp.local:2181", "tt05nn002.hdp.local:2181").asJava,
+      Optional.of("/solrtest")
+    ).build()
+
+    val create = CollectionAdminRequest.createCollection(collection, shards, replicas)
+    create.setMaxShardsPerNode(replicas)
+    logger.debug(s"create = ${create}")
+    val response = create.process(client)
+    logger.debug(s"response = ${response}")
+  }
 
   @Test
   def deleteDocument(): Unit = {
@@ -295,7 +311,7 @@ class SparkSolr {
 
   @Test
   def deleteCollectionTest(): Unit = {
-    val collection = "films_test"
+    val collection = "chat_nick_change"
     val client: CloudSolrClient = new CloudSolrClient.Builder(
       List("tt05cn001.hdp.local:2181", "tt05nn001.hdp.local:2181", "tt05nn002.hdp.local:2181").asJava,
       Optional.of("/solrtest")
