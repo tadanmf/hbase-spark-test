@@ -1,8 +1,5 @@
 package io.datadynamics
 
-import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
-
 object ChatLog {
   def create(line: String): ChatLog = {
     val splits: Array[String] = line.split("\t")

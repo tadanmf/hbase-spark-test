@@ -19,6 +19,7 @@ import org.junit.{Before, Test}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util
 import scala.collection.JavaConverters._
@@ -57,7 +58,7 @@ class ParseTest extends Serializable {
 
   @Test
   def parse() {
-    val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
+    val chatPath = "hdfs://172.30.1.243:8020/download/input/*"
 
     // hbase setting
     val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
@@ -106,10 +107,10 @@ class ParseTest extends Serializable {
     }
 
     val connection: Connection = ConnectionFactory.createConnection(hbaseConfig)
-    val tableName: TableName = TableName.valueOf("create_test")
+    val tableName: TableName = TableName.valueOf("chat")
 
     // data에서 column family 추출하여 저장할 변수
-    //val cfs = spark.sparkContext.broadcast(mutable.Set[ColumnFamilyDescriptor]())
+    val cfs = spark.sparkContext.broadcast(mutable.Set[ColumnFamilyDescriptor]())
 
     // create cell
     val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = cellRdd.repartitionAndSortWithinPartitions(new CellPartitioner(partitions)).map(tempCell => {
@@ -118,11 +119,11 @@ class ParseTest extends Serializable {
       val ts: Long = rowKeySdf.parse(rowkeyString.split("\\^", -1)(2)).getTime
       val startTimeStr: String = startTime.toString
 
-      //cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
+      cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
 
       val rowkey: Array[Byte] = rowkeyString.getBytes
-      val family: Array[Byte] = Bytes.toBytes("block_ttl_cf")
-      //val family: Array[Byte] = Bytes.toBytes(startTimeStr)
+      //val family: Array[Byte] = Bytes.toBytes("block_ttl_cf")
+      val family: Array[Byte] = Bytes.toBytes(startTimeStr)
       val qualifier: Array[Byte] = qualifierString.getBytes()
       //val value = Bytes.toBytes(chat)
 
@@ -139,8 +140,8 @@ class ParseTest extends Serializable {
     val admin: Admin = connection.getAdmin
 
     // create table
-    //admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs.value.asJava).build())
-    //logger.info(s"create table")
+    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs.value.asJava).build())
+    logger.info(s"create table")
 
     //val tableNames: Array[TableName] = admin.listTableNames()
     //tableNames.foreach(name => logger.info(s"table name > ${name}"))
@@ -152,7 +153,7 @@ class ParseTest extends Serializable {
     HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator)
     val toCellConf: Configuration = job.getConfiguration
 
-    val outputDir = "hdfs://nn/download/output_hfile"
+    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
     val outputPath = new Path(outputDir)
     val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
     if (fs.exists(outputPath)) {
@@ -251,5 +252,142 @@ class ParseTest extends Serializable {
     val cell = new KeyValue(rowkey, family, qualifier, value)
     val tuple: (ImmutableBytesWritable, KeyValue) = (new ImmutableBytesWritable(rowkey), cell)
     logger.info(s"tuple = ${tuple}")
+  }
+
+  @Test
+  def starBulkloadToHbase() {
+    val chatPath = "hdfs://172.30.1.243:8020/download/input_star/star_1582635623000.log"
+
+    // hbase setting
+    val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
+    hbaseConfig.set("hbase.zookeeper.quorum", "tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local")
+    hbaseConfig.set("zookeeper.znode.parent", "/hbase-unsecure")
+    hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
+
+    // scan log file
+    val partitions = 1
+    val baseRdd: RDD[StarLog] = spark.sparkContext.textFile(chatPath, partitions).map(line => {
+      StarLog.create(line)
+    })
+    //    baseRdd.take(5).map(log => logger.info(s"baseRdd > ${log}"))
+
+    // set input format
+    val rowKeySdf = new SimpleDateFormat("yyyyMMdd-HHmmss.SSS")
+
+    val cellRdd: RDD[((String, String, Long), Int)] = baseRdd.map(starLog => {
+      val bjId: String = starLog.bjId
+      val startTime: Long = starLog.bStartTime
+      val nowTime: Long = starLog.nowTime
+      val starTime: String = rowKeySdf.format(nowTime)
+      val bucket: Int = (s"${bjId}^${startTime}".hashCode & Int.MaxValue) % partitions
+      ((s"${bucket}^${bjId}^${starTime}", starLog.userId, startTime), starLog.balloonNum)
+    })
+
+    class CellPartitioner(partitions: Int) extends Partitioner {
+      override def numPartitions: Int = partitions
+
+      override def getPartition(key: Any): Int = key.asInstanceOf[(String, String, Long)]._1.split("\\^")(0).toInt
+    }
+
+    val connection: Connection = ConnectionFactory.createConnection(hbaseConfig)
+    val tableName: TableName = TableName.valueOf("star")
+
+    // data에서 column family 추출하여 저장할 변수
+    val cfs = spark.sparkContext.broadcast(mutable.Set[ColumnFamilyDescriptor]())
+
+    // create cell
+    val toCellRdd: RDD[(ImmutableBytesWritable, KeyValue)] = cellRdd.repartitionAndSortWithinPartitions(new CellPartitioner(partitions)).map(tempCell => {
+      val (rowKeyQualifier: (String, String, Long), value: Int) = tempCell
+      val (rowkeyString: String, qualifierString: String, startTime: Long) = rowKeyQualifier
+      val ts: Long = rowKeySdf.parse(rowkeyString.split("\\^", -1)(2)).getTime
+      val startTimeStr: String = startTime.toString
+
+      cfs.value += ColumnFamilyDescriptorBuilder.of(startTimeStr)
+
+      val rowkey: Array[Byte] = rowkeyString.getBytes
+      val family: Array[Byte] = Bytes.toBytes(startTimeStr)
+      val qualifier: Array[Byte] = qualifierString.getBytes()
+      //val value = Bytes.toBytes(chat)
+
+      val cell = new KeyValue(rowkey, family, qualifier, ts, Bytes.toBytes(value))
+      (new ImmutableBytesWritable(rowkey), cell)
+    })
+
+    // cfs 값 세팅을 위해 RDD action
+    toCellRdd.count()
+    //logger.info(s"${cfs.value}")
+
+    // job, connection, admin
+    val job: Job = Job.getInstance(hbaseConfig, "star log bulkload")
+    val admin: Admin = connection.getAdmin
+
+    // create table
+    admin.createTable(TableDescriptorBuilder.newBuilder(tableName).setColumnFamilies(cfs.value.asJava).build())
+    logger.info(s"create table")
+
+    //val tableNames: Array[TableName] = admin.listTableNames()
+    //tableNames.foreach(name => logger.info(s"table name > ${name}"))
+
+    val regionLocator: RegionLocator = connection.getRegionLocator(tableName)
+    val table: Table = connection.getTable(tableName)
+
+    // create hfile
+    HFileOutputFormat2.configureIncrementalLoad(job, table, regionLocator)
+    val toCellConf: Configuration = job.getConfiguration
+
+    val outputDir = "hdfs://172.30.1.243:8020/download/output_hfile"
+    val outputPath = new Path(outputDir)
+    val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
+    if (fs.exists(outputPath)) {
+      fs.delete(outputPath, true)
+      logger.warn(s"delete ${outputPath}")
+    }
+    toCellRdd.saveAsNewAPIHadoopFile(outputDir, classOf[ImmutableBytesWritable], classOf[KeyValue], classOf[HFileOutputFormat2], toCellConf)
+
+    val loadIncrementalHFiles = new LoadIncrementalHFiles(hbaseConfig)
+    logger.info("bulk loading ...")
+    loadIncrementalHFiles.doBulkLoad(outputPath, admin, table, regionLocator, false, true)
+    logger.info("bulk load success")
+  }
+
+  @Test
+  def getStarDataMapreduceTest(): Unit = {
+    // hbase setting
+    val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
+    hbaseConfig.set("hbase.zookeeper.quorum", "tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local")
+    hbaseConfig.set("zookeeper.znode.parent", "/hbase-unsecure")
+    hbaseConfig.setInt("hbase.zookeeper.property.clientPort", 2181)
+
+    val cf = "1582635623000"        // column family
+    val q = "sdm0228"          // qualifier
+
+    val scan = new Scan()
+    scan.addColumn(cf.getBytes, q.getBytes)
+    //scan.setLimit(4)
+
+    hbaseConfig.set(TableInputFormat.INPUT_TABLE, "star")
+    hbaseConfig.set(TableInputFormat.SCAN, convertScanToString(scan))
+
+    val resultRdd: RDD[(ImmutableBytesWritable, Result)] =
+      spark.sparkContext.newAPIHadoopRDD(hbaseConfig, classOf[TableInputFormat], classOf[ImmutableBytesWritable], classOf[Result])
+
+    logger.info(s"resultRdd.count() >> ${resultRdd.count()}")
+
+    val values: RDD[(String, Int)] = resultRdd.map(kv => {
+      val result: Result = kv._2
+      result.advance()
+      val cell: Cell = result.current()
+      val qualifier: Array[Byte] = CellUtil.cloneQualifier(cell)
+      val value: Array[Byte] = CellUtil.cloneValue(cell)
+
+      //val dis = new DataInputStream(new ByteArrayInputStream(value))
+      //val size: Int = dis.readInt()
+      //val chatMessage: String = dis.readUTF()
+      (new String(qualifier), ByteBuffer.wrap(value).getInt)
+    })
+
+    values.collect().map(s => logger.info(s"[${s._1}] ${s._2}"))
+
+    assert(resultRdd.count() > 0)
   }
 }

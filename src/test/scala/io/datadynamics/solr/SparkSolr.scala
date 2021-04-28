@@ -1,6 +1,6 @@
 package io.datadynamics.solr
 
-import io.datadynamics.ChatLog
+import io.datadynamics.{ChatLog, StarLog}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.{Cell, CellUtil, HBaseConfiguration}
 import org.apache.hadoop.hbase.client.{Result, Scan}
@@ -256,6 +256,46 @@ class SparkSolr {
   }
 
   @Test
+  def starWriteTest(): Unit = {
+
+    val chatPath = "hdfs://172.30.1.243:8020/download/input_star/star_1582635623000.log"
+    val partitions = 5
+
+    val baseRdd = spark.sparkContext.textFile(chatPath, partitions).map(line => {
+      StarLog.create(line)
+    })
+
+    val valueRdd: RDD[Row] = baseRdd.groupBy(chat => {
+      (chat.userId, chat.userNick, chat.bStartTime)
+    }).map(kv => {
+      val result: ((String, String, Long), Iterable[StarLog]) = kv
+      val (userId: String, userNick:String, bStartTime:Long) = result._1
+      Row(userId, userNick, bStartTime)
+    })
+
+    logger.info(s"valueRdd.count() >> ${valueRdd.count()}")
+
+    val options = Map(
+      "zkhost" -> "172.30.1.241:2181,172.30.1.243:2181,172.30.1.244:2181/solrtest",
+      "collection" -> "star",
+      "commit_within" -> "2000",
+      "gen_uniq_key" -> "true"
+    )
+
+    val schema: StructType = StructType(Array(
+      StructField("userId", DataTypes.StringType),
+      StructField("userNick", DataTypes.StringType),
+      StructField("bStartTime", LongType)
+    ))
+
+    val valueDF: DataFrame = spark.createDataFrame(valueRdd, schema)
+
+    logger.info(s"valueDF.count() >> ${valueDF.count()}")
+
+    valueDF.write.format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save
+  }
+
+  @Test
   def chatWriteTest2(): Unit = {
 
     val chatPath = "hdfs://172.30.1.243:8020/download/input/chat_1582635623000.log"
@@ -287,7 +327,7 @@ class SparkSolr {
   def createCollectionTest(): Unit = {
     val shards = 5
     val replicas = 2
-    val collection = "chat_nick_change"
+    val collection = "star"
     val client: CloudSolrClient = new CloudSolrClient.Builder(
       List("tt05cn001.hdp.local:2181", "tt05nn001.hdp.local:2181", "tt05nn002.hdp.local:2181").asJava,
       Optional.of("/solrtest")
