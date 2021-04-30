@@ -46,7 +46,7 @@ libraryDependencies ++= Seq(
   "com.hortonworks.hive" %% "hive-warehouse-connector" % "1.0.0.3.0.1.0-187"
 )
 
-mainClass in assembly := Some("io.datadynamics.HbaseSpark")
+mainClass in assembly := Some("io.datadynamics.ParseToParquet")
 
 assemblyJarName in assembly := "spark_hbase_test.jar"
 
