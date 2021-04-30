@@ -164,7 +164,7 @@ class SparkSolr {
     val userNick = "HoneyBread"
 
     val options = Map(
-      "collection" -> "chats",
+      "collection" -> "chat_nick_change",
       "zkhost" -> "tt05cn001.hdp.local:2181,tt05nn001.hdp.local:2181,tt05nn002.hdp.local:2181/solrtest"
     )
     val df: DataFrame = spark.read.format("solr")
@@ -173,7 +173,7 @@ class SparkSolr {
       .load
 
     val cfqs: Array[(String, String)] = df.collect().map(row => {
-      val cf: String = row.getAs[Long](0).toString
+      val cf: String = row.getAs[Long]("bStartTime").toString
       val q: String = row.getAs[String]("userId")
       (cf, q)
     })
