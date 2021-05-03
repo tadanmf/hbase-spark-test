@@ -1,0 +1,154 @@
+drop table if exists hbase_hive_table;
+create external table hbase_hive_table (key string, value string)
+stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+with serdeproperties (
+    "hbase.columns.mapping" = ":key,1613480345000:jeongtoo17"
+)
+tblproperties (
+    "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+    "zookeeper.znode.parent"="/hbase-unsecure",
+    "hbase.zookeeper.property.clientPort"="2181",
+    "hbase.table.name" = "chat",
+    "hbase.mapred.output.outputtable" = "chat"
+);
+
+drop table if exists hbase_hive_table2;
+create external table hbase_hive_table2 (key string, chat map<string, string>)
+stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+    with serdeproperties (
+    "hbase.columns.mapping" = ":key,1613480345000:.*"
+    )
+tblproperties (
+    "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+    "zookeeper.znode.parent"="/hbase-unsecure",
+    "hbase.zookeeper.property.clientPort"="2181",
+    "hbase.table.name" = "chat",
+    "hbase.mapred.output.outputtable" = "chat",
+    "solr.query" = "userId: jeongtoo17"
+);
+
+drop table if exists hbase_hive_table3;
+create external table hbase_hive_table3 (key string, chat map<string, string>, ts timestamp)
+    stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+        with serdeproperties (
+        "hbase.columns.mapping" = ":key,1582635623000:.*,:timestamp"
+        )
+    tblproperties (
+        "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+        "zookeeper.znode.parent"="/hbase-unsecure",
+        "hbase.zookeeper.property.clientPort"="2181",
+        "hbase.table.name" = "chat",
+        "hbase.mapred.output.outputtable" = "chat"
+);
+
+select key, chat, chat['solht'] as solht, chat['hwoan104'] as hwoan104
+from hbase_hive_table2 limit 10;
+
+select * from hbase_hive_table3 where chat['maxxxxkr'] is not null;
+
+
+select chat['maxxxxkr'] as chat, ts
+from hbase_hive_table3
+where chat['maxxxxkr'] is not null and
+      (unix_timestamp(ts, 'yyyy-MM-dd HH:mm:ss.SSS') >= unix_timestamp(from_unixtime(1583299678, "yyyy-MM-dd HH:mm:ss.SSS"), 'yyyy-MM-dd HH:mm:ss.SSS')
+      and unix_timestamp(ts, 'yyyy-MM-dd HH:mm:ss.SSS') < unix_timestamp(from_unixtime(1583464975, "yyyy-MM-dd HH:mm:ss.SSS"), 'yyyy-MM-dd HH:mm:ss.SSS')
+)
+limit 5;
+
+select chat['maxxxxkr'], ts
+from hbase_hive_table3
+where chat['maxxxxkr'] is not null and
+    unix_timestamp(ts, 'yyyy-MM-dd HH:mm:ss.SSS') = unix_timestamp(from_unixtime(1583299678, "yyyy-MM-dd HH:mm:ss.SSS"), 'yyyy-MM-dd HH:mm:ss.SSS')
+;
+
+drop table if exists star_table;
+create external table star_table (key string, star map<string, string>, ts timestamp)
+stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+    with serdeproperties (
+    "hbase.columns.mapping" = ":key,1582635623000:.*,:timestamp"
+    )
+tblproperties (
+    "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+    "zookeeper.znode.parent"="/hbase-unsecure",
+    "hbase.zookeeper.property.clientPort"="2181",
+    "hbase.table.name" = "star",
+    "hbase.mapred.output.outputtable" = "star"
+);
+
+SELECT *
+FROM star_table
+WHERE star['sdm0228'] is not null;
+
+select map_keys(star_table.star) from star_table;
+
+SELECT 'star' as type
+FROM star_table
+WHERE star['sdm0228'] is not null
+UNION ALL
+SELECT 'chat' as type
+FROM hbase_hive_table3
+WHERE chat['sdm0228'] is not null
+LIMIT 5;
+
+drop table if exists chatlog_sdm0228;
+create external table chatlog_sdm0228 (key string, chat string, ts timestamp)
+stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+    with serdeproperties (
+    "hbase.columns.mapping" = ":key,1582635623000:sdm0228,:timestamp"
+    )
+tblproperties (
+    "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+    "zookeeper.znode.parent"="/hbase-unsecure",
+    "hbase.zookeeper.property.clientPort"="2181",
+    "hbase.table.name" = "chat"
+);
+
+drop table if exists starlog_sdm0228;
+create external table starlog_sdm0228 (key string, star binary, ts timestamp)
+stored by 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+    with serdeproperties (
+    "hbase.columns.mapping" = ":key,1582635623000:sdm0228#binary,:timestamp"
+    )
+tblproperties (
+    "hbase.zookeeper.quorum"="tt05gn001.hdp.local,tt05nn001.hdp.local,tt05nn002.hdp.local",
+    "zookeeper.znode.parent"="/hbase-unsecure",
+    "hbase.zookeeper.property.clientPort"="2181",
+    "hbase.table.name" = "star"
+);
+
+select * from chatlog_sdm0228 limit 10;
+select * from starlog_sdm0228 limit 10;
+
+drop table if exists chatlog_sdm0228_parquet;
+create external table chatlog_sdm0228_parquet
+(key string, chat string, ts timestamp)
+stored as avro
+location 'hdfs://nn/warehouse/tablespace/external/hive/chatlog_sdm0228_parquet';
+
+insert into chatlog_sdm0228_parquet select * from chatlog_sdm0228;
+
+create table starlog_sdm0228_parquet as select * from starlog_sdm0228;
+
+select *, concat_ws(',', map_keys(star)) as user_ids
+from starlog_sdm0228
+limit 10;
+
+-- failed
+SELECT star as type
+FROM starlog_sdm0228
+WHERE star is not null
+UNION ALL
+SELECT cast(chat as binary) as type
+FROM chatlog_sdm0228
+WHERE chat is not null
+LIMIT 5;
+
+-- select *, lead(chat, 1) over(partition by key order by ts) as next_chat
+select *
+from chatlog_sdm0228 limit 10;
+
+select *
+from chatlog_sdm0228 as chat
+join starlog_sdm0228 as star
+on unix_timestamp(chat.ts, 'yyyy-MM-dd HH:mm:ss.SSS') >= unix_timestamp(star.ts, 'yyyy-MM-dd HH:mm:ss.SSS') - 20
+limit 10;
