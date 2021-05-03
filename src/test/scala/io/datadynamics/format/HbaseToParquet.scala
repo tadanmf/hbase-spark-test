@@ -12,13 +12,13 @@ import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataTypes, LongType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.junit.Test
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{ByteArrayInputStream, DataInputStream}
 import java.nio.ByteBuffer
 import scala.collection.mutable.ArrayBuffer
 
+import org.junit.Test
 /**
  * User
  */
@@ -32,8 +32,8 @@ class HbaseToParquet {
     // input
     val table = "chat"
     val cf = "1582635623000"
-    val qualifier = "jeondaehun"
-    val outputDir = "hdfs://172.30.1.243:8020/download/output"
+    //val qualifier = "jeondaehun"
+    val outputDir = "hdfs://nn/download/output_chat_parquet"
 
     // hbase setting
     val hbaseConfig: Configuration = HBaseConfiguration.create(spark.sparkContext.hadoopConfiguration)
@@ -43,7 +43,8 @@ class HbaseToParquet {
 
     // scan setting
     val scan = new Scan()
-    scan.addColumn(cf.getBytes(), qualifier.getBytes())
+    scan.addFamily(cf.getBytes)
+    //scan.addColumn(cf.getBytes(), qualifier.getBytes())
     hbaseConfig.set(TableInputFormat.INPUT_TABLE, table)
     hbaseConfig.set(TableInputFormat.SCAN, convertScanToString(scan))
 
@@ -82,7 +83,7 @@ class HbaseToParquet {
     ))
     val df: DataFrame = spark.createDataFrame(values, schema)
 
-    df.show(5)
+    df.show(10)
 
     // delete output path
     val outputPath = new Path(outputDir)
@@ -92,7 +93,11 @@ class HbaseToParquet {
       logger.warn(s"delete ${outputPath}")
     }
 
-    df.sort("key").write.parquet(outputDir)
+    df.
+      sort("key").
+      write.
+      option("compression", "gzip").
+      parquet(outputDir)
   }
 
   @Test
@@ -153,7 +158,7 @@ class HbaseToParquet {
     logger.info(s"df.rdd.getNumPartitions >> ${df.rdd.getNumPartitions}")
 
     // delete output path
-    /*val outputPath = new Path(outputDir)
+    val outputPath = new Path(outputDir)
     val fs: FileSystem = outputPath.getFileSystem(spark.sparkContext.hadoopConfiguration)
     if (fs.exists(outputPath)) {
       fs.delete(outputPath, true)
@@ -164,11 +169,8 @@ class HbaseToParquet {
       sort("key").
       write.
       options(Map(
-        ("compression", "gzip"),
-        ("parquet.block.size", s"${256 * 1024 * 1024}"),
-        ("parquet.page.size", s"${2 * 1024 * 1024}")
+        ("compression", "gzip")
       )).
       parquet(outputDir)
-    */
   }
 }
